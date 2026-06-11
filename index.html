@@ -497,6 +497,8 @@
     try{ stored=JSON.parse(localStorage.getItem(KEY)); }catch(e){}
     var src=fromHash||stored;
     if(src&&src.days){ state=src; state.img=state.img||{}; state.t=state.t||{}; }
+    /* published default: weeks after June 21 stay hidden until revealed */
+    if(state.hideFrom===undefined) state.hideFrom="2026-06-22";
     if(MONTHS.indexOf(state.m)<0) state.m=5;
   }
 
