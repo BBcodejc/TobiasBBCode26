@@ -39,6 +39,9 @@
   .adminBtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:30px;padding:7px 13px;font-size:13px;font-weight:600;color:var(--mut);}
   .adminBtn:active{background:var(--panel2);}
   .adminBtn svg{width:14px;height:14px;}
+  body.locked .adminBtn{display:none;}
+  body.locked .playerPill{pointer-events:none;}
+  body.locked .playerPill .chev{display:none;}
   .byline{color:var(--soft);font-size:11.5px;letter-spacing:.02em;margin-top:9px;display:flex;align-items:center;gap:7px;}
   .mode{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;border:1px solid var(--line);color:var(--mut);}
   .mode .d{width:6px;height:6px;border-radius:50%;background:var(--soft);}
@@ -231,8 +234,8 @@
    CONFIG  —  paste your Supabase project values here to turn on
    the shared cloud. Leave blank to run on-device only.
    ============================================================ */
-var SUPABASE_URL = "";
-var SUPABASE_KEY = "";
+var SUPABASE_URL = "https://xtpbpznvvgthhelslrqn.supabase.co";
+var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh0cGJwem52dmd0aGhlbHNscnFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1NjgwMzksImV4cCI6MjA5ODE0NDAzOX0.g0KooWgrPbB9xtbDIjcK5UT6w7ZQH-68_9d3Cuv23kM";
 /* ============================================================ */
 
 (function(){
@@ -277,7 +280,7 @@ var SUPABASE_KEY = "";
     _saveLocalPlayers(){ localStorage.setItem("players",JSON.stringify(this.players)); },
     async addPlayer(name){
       name=(name||"").trim()||"New Player";
-      var id=slug(name)+"-"+Math.random().toString(36).slice(2,5);
+      var id=slug(name)+"-"+Math.random().toString(36).slice(2,9);
       if(CLOUD){ var r=await sb.from("players").insert({id:id,name:name});if(r.error)throw r.error; }
       this.players.push({id:id,name:name}); if(!CLOUD)this._saveLocalPlayers();
       return id;
@@ -341,7 +344,7 @@ var SUPABASE_KEY = "";
   };
 
   /* ---------- active player ---------- */
-  var activePlayer=null;
+  var activePlayer=null, LOCKED=null;
   function playerName(id){var p=Store.players.find(function(x){return x.id===id;});return p?p.name:"Player";}
   function setActive(id){ activePlayer=id; localStorage.setItem("activePlayer",id); document.getElementById("pillName").textContent=playerName(id); }
 
@@ -472,7 +475,7 @@ var SUPABASE_KEY = "";
       box.appendChild(row);
     });
   }
-  document.getElementById("playerPill").addEventListener("click",function(){renderPlist();show("player",false);});
+  document.getElementById("playerPill").addEventListener("click",function(){if(LOCKED)return;renderPlist();show("player",false);});
   async function addFrom(inputId){
     var inp=document.getElementById(inputId);var name=inp.value.trim();if(!name)return;
     inp.value="";try{var id=await Store.addPlayer(name);setActive(id);await Store.loadIndex();renderCal();renderPlist();renderAdmin();toast("Added "+name);}
@@ -489,10 +492,15 @@ var SUPABASE_KEY = "";
       var card=document.createElement("div");card.className="acard";
       card.innerHTML='<div class="atop"><div class="pavatar">'+initials(p.name)+'</div><input class="aname" value="'+p.name.replace(/"/g,"&quot;")+'" spellcheck="false"></div>'+
         '<div class="astat"><span><b>'+st.count+'</b> workouts logged</span><span>Last: <b>'+fmtShort(st.last)+'</b></span>'+(p.id===activePlayer?'<span style="color:var(--gold)">Active</span>':'')+'</div>'+
-        '<div class="aacts"><button class="view">View log</button><button class="del">Delete</button></div>';
+        '<div class="aacts"><button class="view">View log</button><button class="link">Copy link</button><button class="del">Delete</button></div>';
       var nameInp=card.querySelector(".aname");
       nameInp.addEventListener("change",function(){Store.renamePlayer(p.id,nameInp.value);if(p.id===activePlayer)document.getElementById("pillName").textContent=nameInp.value.trim();});
       card.querySelector(".view").addEventListener("click",function(){setActive(p.id);renderCal();closeAll();toast("Viewing "+p.name);});
+      card.querySelector(".link").addEventListener("click",function(){
+        var url=location.origin+location.pathname+"?p="+p.id;
+        if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(url).then(function(){toast(p.name+"'s link copied");},function(){prompt("Copy "+p.name+"'s link:",url);});}
+        else prompt("Copy "+p.name+"'s link:",url);
+      });
       card.querySelector(".del").addEventListener("click",async function(){
         if(!confirm("Delete "+p.name+" and all of their logged workouts? This cannot be undone."))return;
         var ok=await Store.removePlayer(p.id);
@@ -514,9 +522,14 @@ var SUPABASE_KEY = "";
   /* ---------- boot ---------- */
   (async function(){
     await Store.init();
-    var saved=localStorage.getItem("activePlayer");
-    var exists=saved&&Store.players.some(function(p){return p.id===saved;});
-    setActive(exists?saved:Store.players[0].id);
+    var locked=new URLSearchParams(location.search).get("p");
+    if(locked&&Store.players.some(function(p){return p.id===locked;})){
+      LOCKED=locked;document.body.classList.add("locked");setActive(locked);
+    }else{
+      var saved=localStorage.getItem("activePlayer");
+      var exists=saved&&Store.players.some(function(p){return p.id===saved;});
+      setActive(exists?saved:Store.players[0].id);
+    }
     renderCal();
   })();
 })();
